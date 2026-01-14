@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Infographic Generator</title>
+    <style>
+        body {
+            width: 320px;
+            padding: 15px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f9f9f9;
+            color: #333;
+        }
+        h2 {
+            font-size: 18px;
+            margin-top: 0;
+            color: #d32f2f; /* YouTube Red-ish */
+            text-align: center;
+        }
+        #content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        .hidden {
+            display: none !important;
+        }
+        #status-message {
+            text-align: center;
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        button {
+            background-color: #d32f2f;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.2s;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #b71c1c;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #result-container {
+            width: 100%;
+            text-align: center;
+            margin-top: 10px;
+        }
+        #infographic-image {
+            max-width: 100%;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            display: none; /* Hidden by default */
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #d32f2f;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            margin: 10px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #error-message {
+            color: #d32f2f;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h2>YouTube Infographic</h2>
+    
+    <div id="content">
+        <div id="status-message">Checking page...</div>
+        
+        <button id="generate-btn" class="hidden">Generate Infographic</button>
+        
+        <div id="loading" class="hidden">
+            <div class="loader"></div>
+            <div style="text-align:center; font-size:12px; margin-top:5px;">Generating... this may take a minute.</div>
+        </div>
+
+        <div id="error-message" class="hidden"></div>
+
+        <div id="result-container">
+            <img id="infographic-image" src="" alt="Generated Infographic">
+            <a id="download-link" href="#" target="_blank" class="hidden" style="display:block; margin-top:5px; font-size:12px;">Open Full Image</a>
+        </div>
+    </div>
+
+    <script src="popup.js"></script>
+</body>
+</html>
