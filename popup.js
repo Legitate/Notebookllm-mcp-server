@@ -15,9 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentTab = tabs[0];
         if (currentTab) {
             const url = currentTab.url;
+            const title = currentTab.title;
             statusMessage.textContent = 'Ready to generate.';
             generateBtn.classList.remove('hidden');
-            generateBtn.onclick = () => startGeneration(url);
+            generateBtn.onclick = () => startGeneration(url, title);
 
             // Restore state if available
             chrome.storage.local.get(['infographicState'], (result) => {
@@ -54,8 +55,28 @@ document.addEventListener('DOMContentLoaded', () => {
             infographicImage.src = state.image_url;
             infographicImage.style.display = 'block';
 
-            downloadLink.href = state.image_url;
-            downloadLink.classList.remove('hidden');
+            downloadLink.href = state.image_url; // Keep href for right-click/backup
+
+            // Remove any old listeners (cloning node is a cheap way to clear listeners)
+            const newLink = downloadLink.cloneNode(true);
+            downloadLink.parentNode.replaceChild(newLink, downloadLink);
+            const finalLink = document.getElementById('download-link');
+
+            finalLink.classList.remove('hidden');
+            finalLink.textContent = "Download Image";
+
+            finalLink.onclick = (e) => {
+                e.preventDefault();
+                let filename = "infographic.png";
+                if (state.title) {
+                    const safeTitle = state.title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                    filename = `${safeTitle}.png`;
+                }
+                chrome.downloads.download({
+                    url: state.image_url,
+                    filename: filename
+                });
+            };
 
             generateBtn.textContent = 'Generate Again';
             generateBtn.disabled = false;
@@ -68,7 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function startGeneration(url) {
+    function startGeneration(url, title) {
         // UI Updates
         generateBtn.disabled = true;
         generateBtn.classList.add('hidden'); // Hide button while processing
@@ -79,7 +100,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusMessage.textContent = 'Processing...';
 
         // Send message to background to trigger backend API
-        chrome.runtime.sendMessage({ type: 'GENERATE_INFOGRAPHIC', url: url }, (response) => {
+        chrome.runtime.sendMessage({ type: 'GENERATE_INFOGRAPHIC', url: url, title: title }, (response) => {
             // Handle response
             loadingDiv.classList.add('hidden');
 
@@ -95,8 +116,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 infographicImage.src = response.imageUrl;
                 infographicImage.style.display = 'block';
 
-                downloadLink.href = response.imageUrl;
-                downloadLink.classList.remove('hidden');
+                // Update Download Link logic
+                const newLink = downloadLink.cloneNode(true);
+                downloadLink.parentNode.replaceChild(newLink, downloadLink);
+                const finalLink = document.getElementById('download-link');
+
+                finalLink.href = response.imageUrl;
+                finalLink.classList.remove('hidden');
+                finalLink.textContent = "Download Image";
+
+                finalLink.onclick = (e) => {
+                    e.preventDefault();
+                    let filename = "infographic.png";
+                    if (title) {
+                        const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                        filename = `${safeTitle}.png`;
+                    }
+                    chrome.downloads.download({
+                        url: response.imageUrl,
+                        filename: filename
+                    });
+                };
 
                 // Keep button hidden or show "Generate Again"?
                 generateBtn.textContent = 'Generate Again';

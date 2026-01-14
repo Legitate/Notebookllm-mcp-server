@@ -21,21 +21,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ status: 'enabled' });
 
     } else if (message.type === 'GENERATE_INFOGRAPHIC') {
-        runGenerationFlow(message.url)
+        runGenerationFlow(message.url, message.title)
             .then(res => sendResponse(res))
             .catch(err => sendResponse({ success: false, error: err.message }));
         return true;
+    } else if (message.type === 'DOWNLOAD_IMAGE') {
+        chrome.downloads.download({
+            url: message.url,
+            filename: message.filename
+        });
     }
 });
 
 // --- CORE FLOW ---
 
-async function runGenerationFlow(url) {
+async function runGenerationFlow(url, title) {
     const videoId = extractVideoId(url);
     if (!videoId) throw new Error("Invalid YouTube URL");
 
-    await updateState(videoId, { status: 'RUNNING', operation_id: Date.now() });
+    await updateState(videoId, { status: 'RUNNING', operation_id: Date.now(), title: title });
     broadcastStatus(url, "RUNNING");
+
+    // Daily Limit Check moved to execution phase (if opId is missing)
 
     // Sanitize URL (NotebookLM dislikes playlists/mixes)
     // const cleanUrl = `https://www.youtube.com/watch?v=${videoId}`;
@@ -63,6 +70,12 @@ async function runGenerationFlow(url) {
         console.log("Running Infographic Tool...");
         const opId = await client.runInfographicTool(notebookId, sourceId);
         console.log("Operation ID:", opId);
+
+        if (!opId) {
+            await updateState(videoId, { status: 'LIMIT_EXCEEDED', error: "Your daily limit is over try after 24 hrs" });
+            broadcastStatus(url, "LIMIT_EXCEEDED");
+            return { success: false, error: "Daily limit exceeded" };
+        }
 
         // 5. Poll for Result
         console.log("Polling for result...");
@@ -104,11 +117,26 @@ class NotebookLMClient {
     async init() {
         console.log("Initializing NotebookLM Client...");
         // Fetch homepage to scrape params
-        const response = await fetch(`${NOTEBOOKLM_BASE}/`);
+        let response;
+        try {
+            response = await fetch(`${NOTEBOOKLM_BASE}/`);
+        } catch (e) {
+            console.error("Init Fetch Error:", e);
+            if (e.name === 'TypeError' && e.message === 'Failed to fetch') {
+                throw new Error("Authentication failed. Please log in to NotebookLM.");
+            }
+            throw e;
+        }
+
         console.log(`NotebookLM Homepage Fetch Status: ${response.status}`);
 
+        // Check for redirect to login page
+        if (response.url.includes("accounts.google.com") || response.url.includes("ServiceLogin")) {
+            throw new Error("Authentication failed. Please log in to NotebookLM.");
+        }
+
         if (!response.ok) {
-            if (response.status === 401 || response.status === 403) throw new Error("Authentication failed (401). Please log in to Google.");
+            if (response.status === 401 || response.status === 403) throw new Error("Authentication failed. Please log in to NotebookLM.");
             throw new Error("Failed to reach NotebookLM: " + response.status);
         }
 
@@ -138,8 +166,7 @@ class NotebookLMClient {
 
         if (!this.f_sid) {
             console.error("CRITICAL: Could not find f.sid in homepage content. Auth will fail.");
-            // Log a snippet of usage to see what's wrong
-            console.log("Snippet:", text.substring(0, 500));
+            throw new Error("Authentication failed. Please log in to NotebookLM.");
         }
     }
 
@@ -389,6 +416,9 @@ async function updateState(videoId, newState) {
     if (!videoId) return;
     const result = await chrome.storage.local.get(['infographicStates']);
     const states = result.infographicStates || {};
-    states[videoId] = newState;
+    // Merge existing state with new state to preserve fields like title
+    states[videoId] = { ...(states[videoId] || {}), ...newState };
     await chrome.storage.local.set({ infographicStates: states });
 }
+
+

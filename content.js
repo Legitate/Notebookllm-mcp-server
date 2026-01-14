@@ -319,6 +319,7 @@ function getOrCreateUI() {
         container.appendChild(authContainer);
 
         const loginMsg = document.createElement('div');
+        loginMsg.id = UI_CONTAINER_ID + '-auth-msg';
         loginMsg.className = 'altrosyn-status';
         loginMsg.style.color = '#d93025';
         loginMsg.textContent = "Please log in to NotebookLM in a new tab.";
@@ -344,11 +345,7 @@ function getOrCreateUI() {
         generateBtn.id = UI_CONTAINER_ID + '-generate-btn';
         generateBtn.className = 'altrosyn-btn';
         generateBtn.textContent = 'Generate Infographic';
-        generateBtn.onclick = () => {
-            const url = window.location.href;
-            updateUI('RUNNING');
-            chrome.runtime.sendMessage({ type: 'GENERATE_INFOGRAPHIC', url: url });
-        };
+        generateBtn.onclick = startGeneration;
         interactionContainer.appendChild(generateBtn);
 
         // Image Preview
@@ -375,7 +372,7 @@ function getOrCreateUI() {
     return container;
 }
 
-function updateUI(status, imageUrl = null, errorMessage = null) {
+function updateUI(status, imageUrl = null, errorMessage = null, title = null) {
     const container = getOrCreateUI();
     const statusEl = document.getElementById(UI_CONTAINER_ID + '-status');
     const authContainer = document.getElementById(UI_CONTAINER_ID + '-auth-container');
@@ -384,14 +381,19 @@ function updateUI(status, imageUrl = null, errorMessage = null) {
     const imgPreview = document.getElementById(UI_CONTAINER_ID + '-img-preview');
     const link = document.getElementById(UI_CONTAINER_ID + '-link');
 
+    const authMsg = document.getElementById(UI_CONTAINER_ID + '-auth-msg');
+
     // Default container display
     container.style.display = 'flex';
 
     if (status === 'AUTH_REQUIRED') {
         statusEl.textContent = 'Login Required';
+        authMsg.textContent = "Please log in to NotebookLM in a new tab.";
         authContainer.style.display = 'flex';
-        // interactionContainer.style.display = 'none'; // Don't hide buttons
-        // return; // Fall through to show buttons
+    } else if (status === 'LIMIT_EXCEEDED') {
+        statusEl.textContent = 'Limit Reached';
+        authMsg.textContent = "Your daily limit is over try after 24 hrs";
+        authContainer.style.display = 'flex';
     } else {
         authContainer.style.display = 'none';
     }
@@ -434,6 +436,7 @@ function updateUI(status, imageUrl = null, errorMessage = null) {
             generateBtn.textContent = 'Generate New';
             generateBtn.className = 'altrosyn-btn altrosyn-btn-secondary';
             generateBtn.disabled = false;
+            generateBtn.onclick = resetToInitialState;
         }
     } else if (status === 'INVALID_CONTEXT') {
         generateBtn.textContent = 'Open a Video First';
@@ -443,10 +446,12 @@ function updateUI(status, imageUrl = null, errorMessage = null) {
         generateBtn.textContent = 'Retry Generation';
         generateBtn.className = 'altrosyn-btn';
         generateBtn.disabled = false;
+        generateBtn.onclick = startGeneration;
     } else {
         generateBtn.textContent = 'Generate Infographic';
         generateBtn.className = 'altrosyn-btn';
         generateBtn.disabled = false;
+        generateBtn.onclick = startGeneration;
     }
 
     // Image & Link
@@ -455,8 +460,29 @@ function updateUI(status, imageUrl = null, errorMessage = null) {
         imgPreview.style.display = 'block';
         imgPreview.onclick = () => window.open(imageUrl, '_blank');
 
-        link.href = imageUrl;
+        link.href = imageUrl; // fallback
+        link.textContent = "Download Image";
         link.style.display = 'block';
+
+        link.onclick = (e) => {
+            e.preventDefault();
+            let filename = "infographic.png";
+            if (title) {
+                const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                filename = `${safeTitle}.png`;
+            } else {
+                // Try fallback to page title if not in state
+                const pageTitle = document.title.replace(' - YouTube', '');
+                const safeTitle = pageTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+                filename = `${safeTitle}.png`;
+            }
+
+            chrome.runtime.sendMessage({
+                type: 'DOWNLOAD_IMAGE',
+                url: imageUrl,
+                filename: filename
+            });
+        };
     } else {
         imgPreview.style.display = 'none';
         link.style.display = 'none';
@@ -504,7 +530,7 @@ function restoreStateForCurrentVideo() {
                 return;
             }
 
-            updateUI(state.status, state.image_url, state.error);
+            updateUI(state.status, state.image_url, state.error, state.title);
         } else {
             // No sticky state, fall back to current context
             if (currentId) {
@@ -527,5 +553,30 @@ chrome.runtime.onMessage.addListener((message) => {
         restoreStateForCurrentVideo();
     } else if (message.type === 'AUTH_EXPIRED') {
         updateUI('AUTH_REQUIRED');
+    } else if (message.type === 'LIMIT_EXCEEDED') {
+        updateUI('LIMIT_EXCEEDED');
     }
 });
+
+function startGeneration() {
+    const url = window.location.href;
+    const title = document.title.replace(' - YouTube', '');
+    updateUI('RUNNING');
+    chrome.runtime.sendMessage({ type: 'GENERATE_INFOGRAPHIC', url: url, title: title });
+}
+
+function resetToInitialState() {
+    const currentVideoId = extractVideoId(window.location.href);
+    if (!currentVideoId) return;
+
+    // Clear state for this video
+    chrome.storage.local.get(['infographicStates'], (result) => {
+        const states = result.infographicStates || {};
+        if (states[currentVideoId]) {
+            delete states[currentVideoId];
+            chrome.storage.local.set({ infographicStates: states }, () => {
+                restoreStateForCurrentVideo(); // Should fall back to IDLE
+            });
+        }
+    });
+}
