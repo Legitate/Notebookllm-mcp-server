@@ -66,35 +66,38 @@ function injectStyles() {
             position: fixed;
             bottom: 24px;
             right: 24px;
-            width: 320px;
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-            border-radius: 16px;
-            padding: 20px;
+            width: 340px;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0,0,0,0.05);
+            border-radius: 24px;
+            padding: 24px;
             z-index: 2147483647;
-            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
             display: none;
             flex-direction: column;
-            gap: 16px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
+            gap: 18px;
+            border: 1px solid rgba(255, 255, 255, 0.8);
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            color: #202124;
+            color: #1f2937;
         }
         #${UI_CONTAINER_ID}.minimized {
-            width: 48px;
-            height: 48px;
+            width: 56px;
+            height: 56px;
             padding: 0;
-            border-radius: 24px;
+            border-radius: 28px;
             cursor: pointer;
             overflow: hidden;
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
             justify-content: center;
             align-items: center;
+            border: 1px solid rgba(255,255,255,0.8);
         }
         #${UI_CONTAINER_ID}.minimized:hover {
-            transform: scale(1.05);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+            transform: scale(1.08);
+            box-shadow: 0 12px 32px rgba(37, 99, 235, 0.25);
         }
         #${UI_CONTAINER_ID} * {
             box-sizing: border-box;
@@ -104,148 +107,215 @@ function injectStyles() {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            padding-bottom: 4px;
         }
         .altrosyn-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #202124;
+            font-size: 17px;
+            font-weight: 700;
+            color: #111827;
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 10px;
+            letter-spacing: -0.01em;
         }
         .altrosyn-title svg {
-            width: 20px;
-            height: 20px;
-            color: #065fd4;
+            width: 22px;
+            height: 22px;
+            color: #2563eb;
+            filter: drop-shadow(0 2px 4px rgba(37,99,235,0.2));
         }
         .altrosyn-min-btn {
             background: transparent;
             border: none;
             cursor: pointer;
-            padding: 4px;
-            color: #5f6368;
+            padding: 6px;
+            color: #9ca3af;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
         .altrosyn-min-btn:hover {
-            background: rgba(0,0,0,0.05);
-            color: #202124;
+            background: rgba(0,0,0,0.04);
+            color: #4b5563;
         }
         
-        /* Inputs */
-        .altrosyn-input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .altrosyn-label {
-            font-size: 12px;
-            color: #5f6368;
-            font-weight: 500;
-        }
-        .altrosyn-textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #dadce0;
-            border-radius: 8px;
-            font-size: 13px;
-            font-family: 'Roboto Mono', monospace;
-            resize: vertical;
-            min-height: 48px;
-            outline: none;
-            background: #f8f9fa;
-            transition: border-color 0.2s, background 0.2s;
-        }
-        .altrosyn-textarea:focus {
-            border-color: #065fd4;
-            background: #fff;
-        }
-
         /* Buttons */
         .altrosyn-btn {
             width: 100%;
-            padding: 10px 16px;
-            background-color: #065fd4;
+            padding: 12px 18px;
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
             color: white;
             border: none;
-            border-radius: 18px;
+            border-radius: 16px;
             cursor: pointer;
             font-size: 14px;
-            font-weight: 500;
-            transition: background-color 0.2s, transform 0.1s, opacity 0.2s;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 8px;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
         }
         .altrosyn-btn:hover {
-            background-color: #0556bf;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+            filter: brightness(1.05);
         }
         .altrosyn-btn:active {
             transform: scale(0.98);
         }
         .altrosyn-btn:disabled {
-            background-color: #dadce0;
-            color: #80868b;
+            background: #e5e7eb;
+            color: #9ca3af;
             cursor: not-allowed;
             transform: none;
+            box-shadow: none;
         }
         .altrosyn-btn-secondary {
-            background-color: transparent;
-            color: #065fd4;
-            border: 1px solid #dadce0;
+            background: rgba(255, 255, 255, 0.6);
+            color: #2563eb;
+            border: 1px solid rgba(37, 99, 235, 0.2);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
         }
         .altrosyn-btn-secondary:hover {
-            background-color: #f1f3f4;
-            box-shadow: none;
-            border-color: #dadce0;
+            background: rgba(255, 255, 255, 0.9);
+            border-color: rgba(37, 99, 235, 0.4);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
         }
 
         /* Status & Content */
         .altrosyn-status {
             font-size: 14px;
             text-align: center;
-            color: #5f6368;
-            margin: 4px 0;
+            color: #6b7280;
+            margin: 2px 0;
             font-weight: 500;
         }
         .altrosyn-img-preview {
             width: 100%;
             height: auto;
-            border-radius: 8px;
-            border: 1px solid #e8eaed;
+            border-radius: 12px;
+            border: 1px solid rgba(0,0,0,0.04);
             cursor: pointer;
-            transition: transform 0.2s;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             display: none;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         }
         .altrosyn-img-preview:hover {
-            transform: scale(1.02);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            transform: scale(1.03) rotate(0.5deg);
+            box-shadow: 0 12px 32px rgba(0,0,0,0.15);
         }
         .altrosyn-link {
             display: block;
             text-align: center;
-            color: #065fd4;
+            color: #2563eb;
             text-decoration: none;
-            padding: 8px;
+            padding: 10px;
             font-size: 13px;
-            font-weight: 500;
-            border-radius: 4px;
+            font-weight: 600;
+            border-radius: 12px;
+            transition: background 0.2s;
         }
         .altrosyn-link:hover {
-            background: #f1f3f4;
+            background: rgba(37, 99, 235, 0.08);
+        }
+
+        /* Queue UI */
+        .altrosyn-queue-container {
+            border-top: 1px solid rgba(0,0,0,0.06);
+            padding-top: 16px;
+            margin-top: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .altrosyn-queue-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+            font-weight: 600;
+            color: #374151;
+            cursor: pointer;
+            user-select: none;
+        }
+        .altrosyn-queue-header:hover {
+            color: #111827;
+        }
+        .altrosyn-queue-count {
+            background: #eff6ff;
+            color: #2563eb;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+        .altrosyn-queue-list {
+            display: none; /* Toggled */
+            flex-direction: column;
+            gap: 6px;
+            max-height: 160px;
+            overflow-y: auto;
+            margin: 4px 0;
+            padding-right: 4px;
+        }
+        /* Custom Scrollbar */
+        .altrosyn-queue-list::-webkit-scrollbar {
+            width: 4px;
+        }
+        .altrosyn-queue-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .altrosyn-queue-list::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
         }
         
-        /* Minimized State Icon */
+        .altrosyn-queue-list.expanded {
+            display: flex;
+        }
+        .altrosyn-queue-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 12px;
+            padding: 8px 10px;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(0,0,0,0.04);
+            border-radius: 8px;
+            color: #4b5563;
+        }
+        .altrosyn-queue-item span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        .altrosyn-queue-remove {
+            color: #ef4444;
+            cursor: pointer;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+        }
+        .altrosyn-queue-remove:hover {
+            background: rgba(239, 68, 68, 0.1);
+        }
+        .altrosyn-queue-controls {
+            display: flex;
+            gap: 10px;
+        }
         .minimized-icon {
             display: none;
-            width: 24px;
-            height: 24px;
-            color: #065fd4;
+            width: 28px;
+            height: 28px;
+            color: #2563eb;
+            filter: drop-shadow(0 2px 4px rgba(37,99,235,0.25));
         }
         #${UI_CONTAINER_ID}.minimized .minimized-icon {
             display: block;
@@ -348,7 +418,57 @@ function getOrCreateUI() {
         generateBtn.onclick = startGeneration;
         interactionContainer.appendChild(generateBtn);
 
-        // Image Preview
+        // Add To Queue Button
+        const addToQueueBtn = document.createElement('button');
+        addToQueueBtn.id = UI_CONTAINER_ID + '-queue-add-btn';
+        addToQueueBtn.className = 'altrosyn-btn altrosyn-btn-secondary';
+        addToQueueBtn.textContent = 'Add to Queue';
+        addToQueueBtn.onclick = handleAddToQueue;
+        interactionContainer.appendChild(addToQueueBtn);
+
+        // Queue Container
+        const queueContainer = document.createElement('div');
+        queueContainer.className = 'altrosyn-queue-container';
+        queueContainer.id = UI_CONTAINER_ID + '-queue-section';
+        queueContainer.style.display = 'none'; // Hidden if empty initially? 
+
+        // Queue Header (Toggle)
+        const queueHeader = document.createElement('div');
+        queueHeader.className = 'altrosyn-queue-header';
+        queueHeader.innerHTML = `<span>Queue</span><span id="${UI_CONTAINER_ID}-queue-count" class="altrosyn-queue-count">0</span>`;
+        queueHeader.onclick = toggleQueueList;
+        queueContainer.appendChild(queueHeader);
+
+        // Queue List
+        const queueList = document.createElement('div');
+        queueList.id = UI_CONTAINER_ID + '-queue-list';
+        queueList.className = 'altrosyn-queue-list';
+        queueContainer.appendChild(queueList);
+
+        // Queue Controls (Generate All, Clear)
+        const queueControls = document.createElement('div');
+        queueControls.className = 'altrosyn-queue-controls';
+
+        const genQueueBtn = document.createElement('button');
+        genQueueBtn.id = UI_CONTAINER_ID + '-queue-gen-btn';
+        genQueueBtn.className = 'altrosyn-btn';
+        genQueueBtn.textContent = 'Generate All';
+        genQueueBtn.style.fontSize = '12px';
+        genQueueBtn.onclick = startQueueGeneration;
+
+        const clearQueueBtn = document.createElement('button');
+        clearQueueBtn.className = 'altrosyn-btn altrosyn-btn-secondary';
+        clearQueueBtn.textContent = 'Clear';
+        clearQueueBtn.style.fontSize = '12px';
+        clearQueueBtn.style.width = 'auto';
+        clearQueueBtn.onclick = clearQueue;
+
+        queueControls.appendChild(genQueueBtn);
+        queueControls.appendChild(clearQueueBtn);
+        queueContainer.appendChild(queueControls);
+
+        interactionContainer.appendChild(queueContainer);
+
         const img = document.createElement('img');
         img.id = UI_CONTAINER_ID + '-img-preview';
         img.className = 'altrosyn-img-preview';
@@ -465,38 +585,45 @@ function updateUI(status, imageUrl = null, errorMessage = null, title = null) {
         generateBtn.textContent = 'Generate Infographic';
         generateBtn.className = 'altrosyn-btn';
         generateBtn.disabled = false;
+        generateBtn.className = 'altrosyn-btn';
+        generateBtn.disabled = false;
         generateBtn.onclick = startGeneration;
     }
 
-    // Image & Link
+    // Update Queue UI
+    // Update Queue UI
+    updateQueueUI(status);
+
+    // Shared Download Logic
+    const triggerDownload = (e) => {
+        e.preventDefault();
+        let filename = "infographic.png";
+        if (title) {
+            const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            filename = `${safeTitle}.png`;
+        } else {
+            // Try fallback to page title if not in state
+            const pageTitle = document.title.replace(' - YouTube', '');
+            const safeTitle = pageTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+            filename = `${safeTitle}.png`;
+        }
+
+        chrome.runtime.sendMessage({
+            type: 'DOWNLOAD_IMAGE',
+            url: imageUrl,
+            filename: filename
+        });
+    };
+
     if (status === 'COMPLETED' && imageUrl) {
         imgPreview.src = imageUrl;
         imgPreview.style.display = 'block';
-        imgPreview.onclick = () => window.open(imageUrl, '_blank');
+        imgPreview.onclick = triggerDownload; // Now triggers specific filename download
 
         link.href = imageUrl; // fallback
         link.textContent = "Download Image";
         link.style.display = 'block';
-
-        link.onclick = (e) => {
-            e.preventDefault();
-            let filename = "infographic.png";
-            if (title) {
-                const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                filename = `${safeTitle}.png`;
-            } else {
-                // Try fallback to page title if not in state
-                const pageTitle = document.title.replace(' - YouTube', '');
-                const safeTitle = pageTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-                filename = `${safeTitle}.png`;
-            }
-
-            chrome.runtime.sendMessage({
-                type: 'DOWNLOAD_IMAGE',
-                url: imageUrl,
-                filename: filename
-            });
-        };
+        link.onclick = triggerDownload;
     } else {
         imgPreview.style.display = 'none';
         link.style.display = 'none';
@@ -537,6 +664,22 @@ function restoreStateForCurrentVideo() {
         if (targetId) {
             // We have a sticky state
             const state = states[targetId];
+
+            // 3. Stale State Cleanup (Safety Check)
+            // If it's been RUNNING for > 5 minutes, it's likely dead.
+            const STALE_TIMEOUT = 5 * 60 * 1000; // 5 mins
+            if (state.status === 'RUNNING' && state.operation_id && (Date.now() - state.operation_id > STALE_TIMEOUT)) {
+                console.warn(`Detected stale RUNNING state for ${targetId} (Age: ${Date.now() - state.operation_id}ms). Resetting.`);
+                // Auto-fail it to unlock UI
+                const cleanedState = { ...state, status: 'FAILED', error: 'Operation timed out (stale)' };
+                // Update local storage effectively "healing" the state
+                states[targetId] = cleanedState;
+                chrome.storage.local.set({ infographicStates: states });
+
+                // Show the failed state
+                updateUI('FAILED', null, 'Operation timed out (stale)');
+                return;
+            }
 
             if (state.status === 'AUTH_PENDING') {
                 // No auto-retry here for now - user needs to login elsewhere.
@@ -579,18 +722,173 @@ function startGeneration() {
     chrome.runtime.sendMessage({ type: 'GENERATE_INFOGRAPHIC', url: url, title: title });
 }
 
+// --- QUEUE LOGIC ---
+
+function updateQueueUI(currentStatus = 'IDLE') {
+    chrome.storage.local.get(['infographicQueue'], (result) => {
+        const queue = result.infographicQueue || [];
+        const countEl = document.getElementById(UI_CONTAINER_ID + '-queue-count');
+        const listEl = document.getElementById(UI_CONTAINER_ID + '-queue-list');
+        const sectionEl = document.getElementById(UI_CONTAINER_ID + '-queue-section');
+        const addBtn = document.getElementById(UI_CONTAINER_ID + '-queue-add-btn');
+        const genBtn = document.getElementById(UI_CONTAINER_ID + '-queue-gen-btn');
+
+        if (countEl) countEl.textContent = queue.length;
+
+        // Show/Hide Queue Section based on content? 
+        // Let's always show it if there's something, or maybe always show it to discover feature?
+        // Decided: always show it to let user know it exists.
+        if (sectionEl) sectionEl.style.display = 'flex';
+
+        // Check if current video is in queue
+        const currentId = extractVideoId(window.location.href);
+
+        // Helper to disable buttons
+        const isRunning = (currentStatus === 'RUNNING');
+
+        if (addBtn) {
+            if (isRunning) {
+                addBtn.disabled = true;
+                addBtn.textContent = 'Queue Locked';
+            } else if (!currentId) {
+                addBtn.disabled = true;
+                addBtn.textContent = 'Open Video to Add';
+            } else if (queue.some(item => item.videoId === currentId)) {
+                addBtn.disabled = true;
+                addBtn.textContent = 'Added to Queue';
+            } else {
+                addBtn.disabled = false;
+                addBtn.textContent = 'Add to Queue';
+            }
+        }
+
+        // Render List
+        if (listEl) {
+            listEl.innerHTML = '';
+            if (queue.length === 0) {
+                const emptyMsg = document.createElement('div');
+                emptyMsg.textContent = 'Queue is empty';
+                emptyMsg.style.fontSize = '12px';
+                emptyMsg.style.color = '#9aa0a6';
+                emptyMsg.style.textAlign = 'center';
+                emptyMsg.style.padding = '8px';
+                listEl.appendChild(emptyMsg);
+                if (genBtn) genBtn.disabled = true;
+            } else {
+                // Generate Button Logic
+                if (genBtn) {
+                    if (isRunning) {
+                        genBtn.disabled = true;
+                        genBtn.textContent = 'Processing...';
+                    } else {
+                        genBtn.disabled = false;
+                        genBtn.textContent = 'Generate All';
+                    }
+                }
+
+                queue.forEach((item, index) => {
+                    const row = document.createElement('div');
+                    row.className = 'altrosyn-queue-item';
+                    row.innerHTML = `<span>${item.title}</span>`;
+
+                    const removeBtn = document.createElement('div');
+                    removeBtn.className = 'altrosyn-queue-remove';
+                    removeBtn.textContent = '×';
+                    // Disable remove if running? Maybe safer.
+                    if (isRunning) {
+                        removeBtn.style.pointerEvents = 'none';
+                        removeBtn.style.opacity = '0.5';
+                    } else {
+                        removeBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            removeFromQueue(index);
+                        };
+                    }
+                    row.appendChild(removeBtn);
+                    listEl.appendChild(row);
+                });
+            }
+        }
+    });
+}
+
+function handleAddToQueue() {
+    const url = window.location.href;
+    const videoId = extractVideoId(url);
+    const title = document.title.replace(' - YouTube', '');
+
+    if (!videoId) return;
+
+    chrome.storage.local.get(['infographicQueue'], (result) => {
+        const queue = result.infographicQueue || [];
+        if (!queue.some(item => item.videoId === videoId)) {
+            queue.push({ videoId, url, title });
+            chrome.storage.local.set({ infographicQueue: queue }, () => {
+                // If we are adding, we must be in a state where we CAN add, so likely IDLE or at least not RUNNING queue
+                // But let's check current UI state/storage if we wanted to be 100% pure, but IDLE is safe default for "enable buttons"
+                // Actually, best to just call it without args to default to IDLE which is "Interactive"
+                updateQueueUI('IDLE');
+            });
+        }
+    });
+}
+
+function removeFromQueue(index) {
+    chrome.storage.local.get(['infographicQueue'], (result) => {
+        const queue = result.infographicQueue || [];
+        queue.splice(index, 1);
+        chrome.storage.local.set({ infographicQueue: queue }, () => {
+            updateQueueUI('IDLE');
+        });
+    });
+}
+
+function clearQueue() {
+    chrome.storage.local.set({ infographicQueue: [] }, () => {
+        updateQueueUI('IDLE');
+    });
+}
+
+function toggleQueueList() {
+    const list = document.getElementById(UI_CONTAINER_ID + '-queue-list');
+    if (list) list.classList.toggle('expanded');
+}
+
+function startQueueGeneration() {
+    chrome.storage.local.get(['infographicQueue'], (result) => {
+        const queue = result.infographicQueue || [];
+        if (queue.length === 0) return;
+
+        updateUI('RUNNING'); // Triggers updateQueueUI('RUNNING') disabling buttons
+        const statusEl = document.getElementById(UI_CONTAINER_ID + '-status');
+        if (statusEl) statusEl.textContent = `Processing ${queue.length} videos...`;
+
+        chrome.runtime.sendMessage({ type: 'GENERATE_QUEUE_INFOGRAPHIC', queue: queue });
+    });
+}
+
+
 function resetToInitialState() {
     const currentVideoId = extractVideoId(window.location.href);
     if (!currentVideoId) return;
 
-    // Clear state for this video
+    // Clear state for this video AND claim focus to break any sticky state from other videos
     chrome.storage.local.get(['infographicStates'], (result) => {
         const states = result.infographicStates || {};
+
+        // Remove existing state for this video
         if (states[currentVideoId]) {
             delete states[currentVideoId];
-            chrome.storage.local.set({ infographicStates: states }, () => {
-                restoreStateForCurrentVideo(); // Should fall back to IDLE
-            });
         }
+
+        // Update storage: 
+        // 1. Save cleaned states
+        // 2. Set lastActiveVideoId to current, ensuring we look at THIS video (which is now empty/IDLE)
+        chrome.storage.local.set({
+            infographicStates: states,
+            lastActiveVideoId: currentVideoId
+        }, () => {
+            restoreStateForCurrentVideo(); // Should now resolve to IDLE
+        });
     });
 }

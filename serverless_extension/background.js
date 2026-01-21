@@ -30,6 +30,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             url: message.url,
             filename: message.filename
         });
+    } else if (message.type === 'GENERATE_QUEUE_INFOGRAPHIC') {
+        runQueueGenerationFlow(message.queue)
+            .then(res => sendResponse(res))
+            .catch(err => sendResponse({ success: false, error: err.message }));
+        return true;
     }
 });
 
@@ -103,6 +108,92 @@ async function runGenerationFlow(url, title) {
         throw e;
     }
 }
+
+
+async function runQueueGenerationFlow(queue) {
+    if (!queue || queue.length === 0) return;
+
+    // Use the first video ID as the "primary" key for state updates to keep UI in sync?
+    // Or maybe we don't update individual video states, but just broadcast global status?
+    // Let's use the first video's ID for state tracking for now, or maybe a special "QUEUE" ID?
+    // Since UI listens to restoration, let's update ALL queued items to RUNNING state so if user navigates to them, they see it?
+
+    const primaryVideoId = queue[0].videoId;
+    const title = `Queue Batch (${queue.length} videos)`;
+
+    // 1. Set State for all items AND set Global Active ID to lock UI
+    await chrome.storage.local.set({ lastActiveVideoId: primaryVideoId });
+
+    for (const item of queue) {
+        await updateState(item.videoId, { status: 'RUNNING', operation_id: Date.now(), title: item.title });
+        // We can't easily broadcast to specific tabs unless we track them, but broadcastStatus does wildcards.
+    }
+    broadcastStatus(null, "RUNNING"); // Broadcast globally
+
+    try {
+        const client = new NotebookLMClient();
+        await client.init();
+
+        console.log("Creating Notebook for Queue...");
+        const notebookId = await client.createNotebook("Infographic Queue Batch");
+        console.log("Notebook ID:", notebookId);
+
+        // 3. Add Sources Sequentially
+        let lastSourceId = null;
+        for (let i = 0; i < queue.length; i++) {
+            const item = queue[i];
+            console.log(`Adding source ${i + 1}/${queue.length}: ${item.url}`);
+
+            // Broadcast progress?
+            // updateState(primaryVideoId, { status: 'RUNNING', message: `Adding source ${i+1}/${queue.length}` });
+
+            const sourceData = await client.addSource(notebookId, item.url);
+            lastSourceId = sourceData.source_id;
+
+            // Brief pause between adds to be safe
+            await new Promise(r => setTimeout(r, 2000));
+        }
+
+        // Wait for ingestion
+        await new Promise(r => setTimeout(r, 5000));
+
+        // 4. Run Infographic Tool (Using the last source ID is usually fine, or maybe we don't strictly need it if context is whole notebook)
+        // NotebookLM tools usually work on "selected sources". Does API auto-select all? 
+        // Usually creating a new notebook enables all current sources.
+
+        console.log("Running Infographic Tool on Batch...");
+        const opId = await client.runInfographicTool(notebookId, lastSourceId);
+
+        if (!opId) {
+            throw new Error("Daily limit exceeded or tool failed");
+        }
+
+        console.log("Polling for result...");
+        const imageUrl = await client.waitForInfographic(notebookId, opId);
+        console.log("Success! Image:", imageUrl);
+
+        // Update ALL queued items to COMPLETED
+        for (const item of queue) {
+            await updateState(item.videoId, { status: 'COMPLETED', image_url: imageUrl, title: item.title });
+        }
+        broadcastStatus(null, "COMPLETED", { image_url: imageUrl });
+
+        // Also clear queue? Maybe content.js should handle that upon receiving COMPLETED?
+        // Let's leave it to user to clear or content script to auto-clear.
+
+        return { success: true, imageUrl: imageUrl };
+
+    } catch (e) {
+        console.error("Queue Generation Failed:", e);
+        const errMsg = e.message || "Unknown error";
+        for (const item of queue) {
+            await updateState(item.videoId, { status: 'FAILED', error: errMsg });
+        }
+        broadcastStatus(null, "FAILED", { error: errMsg });
+        throw e;
+    }
+}
+
 
 // --- CLIENT IMPLEMENTATION ---
 
