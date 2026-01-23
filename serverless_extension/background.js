@@ -7,9 +7,41 @@ let currentYouTubeUrl = null;
 
 chrome.runtime.onInstalled.addListener(async () => {
     chrome.action.disable();
+
+    // 1. Clean Stale States (Reset any "RUNNING" states to "FAILED" so UI unlocks)
+    const result = await chrome.storage.local.get(['infographicStates']);
+    const states = result.infographicStates || {};
+    let hasChanges = false;
+
+    for (const [videoId, state] of Object.entries(states)) {
+        if (state.status === 'RUNNING' || state.status === 'AUTH_PENDING') {
+            console.log(`Resetting stale state for video ${videoId}`);
+            states[videoId] = { ...state, status: 'FAILED', error: 'Extension reloaded' };
+            hasChanges = true;
+        }
+    }
+
+    if (hasChanges) {
+        await chrome.storage.local.set({ infographicStates: states });
+    }
+
+    // 2. Clear Global Sticky ID if it was RUNNING
+    // Actually, let's just leave the sticky ID, but since we reset the state object above, 
+    // the UI will see 'FAILED' instead of 'RUNNING' and unlock.
+
+    // 3. Re-inject Content Script & Enable Action
     const tabs = await chrome.tabs.query({ url: "*://*.youtube.com/*" });
     for (const tab of tabs) {
-        chrome.action.enable(tab.id);
+        try {
+            chrome.action.enable(tab.id);
+            // Re-inject content script to revive UI on existing tabs
+            await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ['content.js']
+            });
+        } catch (e) {
+            console.log(`Could not inject into tab ${tab.id}:`, e);
+        }
     }
 });
 
