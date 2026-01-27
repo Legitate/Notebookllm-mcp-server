@@ -136,9 +136,64 @@ function injectStyles() {
             justify-content: center;
             transition: all 0.2s;
         }
+        }
         .altrosyn-min-btn:hover {
             background: rgba(0,0,0,0.04);
             color: #4b5563;
+        }
+
+        /* Help Tooltip */
+        .altrosyn-help-container {
+            position: relative;
+            display: inline-block;
+        }
+        .altrosyn-help-icon {
+            cursor: pointer;
+            color: #9ca3af;
+            width: 18px;
+            height: 18px;
+            transition: color 0.2s;
+        }
+        .altrosyn-help-icon:hover {
+            color: #2563eb;
+        }
+        .altrosyn-tooltip {
+            visibility: hidden;
+            width: 220px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%; /* Position above */
+            right: 0; 
+            margin-right: -10px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 12px;
+            font-weight: 400;
+            line-height: 1.4;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        .altrosyn-tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            right: 14px;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: #333 transparent transparent transparent;
+        }
+        .altrosyn-help-container:hover .altrosyn-tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+        .altrosyn-tooltip ol {
+            padding-left: 15px;
+            margin: 5px 0 0 0;
         }
         
         /* Buttons */
@@ -361,9 +416,26 @@ function getOrCreateUI() {
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
                 Notebook Gen
             </div>
-            <button class="altrosyn-min-btn" title="Minimize">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            </button>
+        <div style="display:flex; gap:8px; align-items:center;">
+                <div class="altrosyn-help-container">
+                     <svg xmlns="http://www.w3.org/2000/svg" class="altrosyn-help-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div class="altrosyn-tooltip">
+                        <strong>How to use:</strong>
+                        <ol>
+                            <li>Open any YouTube video.</li>
+                            <li>Click "Generate Infographic".</li>
+                            <li>Wait for the magic (takes ~1 min).</li>
+                        </ol>
+                        <hr style="border:0; border-top:1px solid #555; margin:8px 0;">
+                        <span style="opacity:0.8; font-size:11px;">Requires NotebookLM account.</span>
+                    </div>
+                </div>
+                <button class="altrosyn-min-btn" title="Minimize">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                </button>
+            </div>
         `;
         container.appendChild(header);
 
@@ -397,7 +469,7 @@ function getOrCreateUI() {
 
         const loginBtn = document.createElement('a');
         loginBtn.className = 'altrosyn-btn';
-        loginBtn.textContent = 'Open NotebookLM';
+        loginBtn.textContent = 'Connect to NotebookLM';
         loginBtn.href = 'https://notebooklm.google.com';
         loginBtn.target = '_blank';
         authContainer.appendChild(loginBtn);

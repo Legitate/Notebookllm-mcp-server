@@ -126,19 +126,46 @@ async function runGenerationFlow(url, title) {
 
     } catch (e) {
         console.error("Generation Failed:", e);
-        const errMsg = e.message || "Unknown error";
+        const rawError = e.message || "Unknown error";
+        const friendlyError = getUserFriendlyError(rawError);
 
-        // Handle Auth Error specifically?
-        // With auto-auth, 401 means "Not Logged In to Google".
-        if (errMsg.includes("401") || errMsg.includes("Authentication failed")) {
-            await updateState(videoId, { status: 'AUTH_REQUIRED', error: "Please log in to NotebookLM in a new tab." });
-            broadcastStatus(url, "AUTH_EXPIRED"); // Reuse existing signal for "Need Login"
+        // Handle Auth Error specifically
+        if (friendlyError.type === 'AUTH') {
+            await updateState(videoId, { status: 'AUTH_REQUIRED', error: friendlyError.message });
+            broadcastStatus(url, "AUTH_EXPIRED");
+        } else if (friendlyError.type === 'LIMIT') {
+            await updateState(videoId, { status: 'LIMIT_EXCEEDED', error: friendlyError.message });
+            broadcastStatus(url, "LIMIT_EXCEEDED", { error: friendlyError.message });
         } else {
-            await updateState(videoId, { status: 'FAILED', error: errMsg });
-            broadcastStatus(url, "FAILED", { error: errMsg });
+            await updateState(videoId, { status: 'FAILED', error: friendlyError.message });
+            broadcastStatus(url, "FAILED", { error: friendlyError.message });
         }
         throw e;
     }
+}
+
+function getUserFriendlyError(rawError) {
+    const errorLower = rawError.toLowerCase();
+
+    if (errorLower.includes("401") || errorLower.includes("authentication failed") || errorLower.includes("log in")) {
+        return { type: 'AUTH', message: "Session expired. Please log in to NotebookLM again." };
+    }
+    if (errorLower.includes("failed to fetch") || errorLower.includes("network")) {
+        return { type: 'NETWORK', message: "Connection failed. Please check your internet." };
+    }
+    if (errorLower.includes("daily limit") || errorLower.includes("limit exceeded")) {
+        return { type: 'LIMIT', message: "Daily generation limit reached. Please try again tomorrow." };
+    }
+    if (errorLower.includes("failed to add source")) {
+        return { type: 'SOURCE', message: "Could not add this video. It might be private, too long, or age-restricted." };
+    }
+    if (errorLower.includes("timed out") || errorLower.includes("timeout")) {
+        return { type: 'TIMEOUT', message: "Generation took too long. Servers might be busy. Please try again." };
+    }
+
+    // Default fallback
+    return { type: 'UNKNOWN', message: rawError }; // Keep original if specific match not found, or maybe generic?
+    // Let's keep rawError for now so we don't hide useful debug info if it's something valid.
 }
 
 
