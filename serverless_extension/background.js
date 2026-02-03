@@ -3,6 +3,101 @@
 const NOTEBOOKLM_BASE = "https://notebooklm.google.com";
 let currentYouTubeUrl = null;
 
+// --- WEB SOCKET BRIDGE ---
+let ws = null;
+let reconnectInterval = 5000;
+
+function connectWebSocket() {
+    console.log("Attempting WebSocket Connection...");
+    ws = new WebSocket('ws://127.0.0.1:18000');
+
+    ws.onopen = () => {
+        console.log("Connected to MCP Server");
+        ws.send(JSON.stringify({ type: 'HEARTBEAT' }));
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'GENERATE') {
+                console.log("Received MCP Generate Command:", data);
+                // Trigger Generation
+                runGenerationFlow(data.url, "Requested by Agent")
+                    .then(res => {
+                        ws.send(JSON.stringify({
+                            type: 'GENERATION_COMPLETE',
+                            requestId: data.requestId,
+                            imageUrl: res.imageUrl,
+                            error: res.error
+                        }));
+                    })
+                    .catch(e => {
+                        ws.send(JSON.stringify({
+                            type: 'GENERATION_COMPLETE',
+                            requestId: data.requestId,
+                            error: e.message
+                        }));
+                    });
+            } else if (data.type === 'LIST_NOTEBOOKS') {
+                console.log("Received LIST_NOTEBOOKS command");
+                const requestId = data.requestId;
+                // Create a client instance specifically for this request or reuse a global one?
+                // Ideally reuse, but creating new is safer for state isolation in this context.
+                const client = new NotebookLMClient(); // Ensure we have an instance
+
+                client.init().then(async () => {
+                    const notebooks = await client.listNotebooks();
+                    ws.send(JSON.stringify({
+                        type: 'TOOL_COMPLETE',
+                        requestId: requestId,
+                        result: notebooks
+                    }));
+                }).catch(err => {
+                    ws.send(JSON.stringify({
+                        type: 'TOOL_COMPLETE',
+                        requestId: requestId,
+                        error: err.message
+                    }));
+                });
+            } else if (data.type === 'GET_NOTEBOOK_CONTENT') {
+                console.log("Received GET_NOTEBOOK_CONTENT command");
+                const requestId = data.requestId;
+                const notebookId = data.notebookId;
+                const client = new NotebookLMClient();
+
+                client.init().then(async () => {
+                    const content = await client.getNotebookContent(notebookId);
+                    ws.send(JSON.stringify({
+                        type: 'TOOL_COMPLETE',
+                        requestId: requestId,
+                        result: content
+                    }));
+                }).catch(err => {
+                    ws.send(JSON.stringify({
+                        type: 'TOOL_COMPLETE',
+                        requestId: requestId,
+                        error: err.message
+                    }));
+                });
+            }
+        } catch (e) {
+            console.error("WS Message Error:", e);
+        }
+    };
+
+    ws.onclose = () => {
+        console.log("WS Disconnected. Retrying in 5s...");
+        setTimeout(connectWebSocket, reconnectInterval);
+    };
+
+    ws.onerror = (e) => {
+        // console.error("WS Error:", e); 
+    };
+}
+
+// Start connection logic
+connectWebSocket();
+
 // --- INIT & LISTENERS ---
 
 chrome.runtime.onInstalled.addListener(async () => {
@@ -63,10 +158,63 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             filename: message.filename
         });
     } else if (message.type === 'GENERATE_QUEUE_INFOGRAPHIC') {
-        runQueueGenerationFlow(message.queue)
+        runQueueGenerationFlow(message.queue, message.mode) // Pass mode
             .then(res => sendResponse(res))
             .catch(err => sendResponse({ success: false, error: err.message }));
         return true;
+    }
+});
+
+// --- KEEP ALIVE (OFFSCREEN) ---
+const OFFSCREEN_DOCUMENT_PATH = 'offscreen.html';
+
+async function setupOffscreenDocument(path) {
+    const offscreenUrl = chrome.runtime.getURL(path);
+
+    // Check if it already exists
+    const existingContexts = await chrome.runtime.getContexts({
+        contextTypes: ['OFFSCREEN_DOCUMENT'],
+        documentUrls: [offscreenUrl]
+    });
+
+    if (existingContexts.length > 0) {
+        return;
+    }
+
+    // Try to create it, ignoring if it already exists or fails for other reasons
+    try {
+        await chrome.offscreen.createDocument({
+            url: path,
+            reasons: ['BLOBS'],
+            justification: 'Keep service worker alive for long-running processes',
+        });
+    } catch (e) {
+        console.warn("Offscreen document creation failed (likely already exists):", e);
+    }
+}
+
+chrome.runtime.onStartup.addListener(async () => {
+    await setupOffscreenDocument(OFFSCREEN_DOCUMENT_PATH);
+});
+
+// Also run on simple load/reload
+setupOffscreenDocument(OFFSCREEN_DOCUMENT_PATH).catch(console.warn);
+
+chrome.runtime.onMessage.addListener((msg) => {
+    if (msg === 'keepAlive') {
+        // Just receiving the message keeps SW alive
+        // console.log('Keep-alive ping received');
+    }
+});
+
+// --- CONTENT SCRIPT KEEP ALIVE (Legacy/Backup) ---
+chrome.runtime.onConnect.addListener((port) => {
+    if (port.name === 'keepAlive') {
+        port.onMessage.addListener((msg) => {
+            if (msg.type === 'ping') {
+                // Heartbeat
+            }
+        });
     }
 });
 
@@ -77,6 +225,8 @@ async function runGenerationFlow(url, title) {
     if (!videoId) throw new Error("Invalid YouTube URL");
 
     await updateState(videoId, { status: 'RUNNING', operation_id: Date.now(), title: title });
+    // PERSISTENCE FIX: Save this video as the active one so UI recovers if tab is closed
+    await chrome.storage.local.set({ lastActiveVideoId: videoId });
     broadcastStatus(url, "RUNNING");
 
     // Daily Limit Check moved to execution phase (if opId is missing)
@@ -169,88 +319,175 @@ function getUserFriendlyError(rawError) {
 }
 
 
-async function runQueueGenerationFlow(queue) {
+async function runQueueGenerationFlow(queue, mode = 'separate') {
     if (!queue || queue.length === 0) return;
 
-    // Use the first video ID as the "primary" key for state updates to keep UI in sync?
-    // Or maybe we don't update individual video states, but just broadcast global status?
-    // Let's use the first video's ID for state tracking for now, or maybe a special "QUEUE" ID?
-    // Since UI listens to restoration, let's update ALL queued items to RUNNING state so if user navigates to them, they see it?
-
+    // Use the first video ID as the "primary" key for locking the UI initially?
     const primaryVideoId = queue[0].videoId;
-    const title = `Queue Batch (${queue.length} videos)`;
-
-    // 1. Set State for all items AND set Global Active ID to lock UI
     await chrome.storage.local.set({ lastActiveVideoId: primaryVideoId });
 
-    for (const item of queue) {
-        await updateState(item.videoId, { status: 'RUNNING', operation_id: Date.now(), title: item.title });
-        // We can't easily broadcast to specific tabs unless we track them, but broadcastStatus does wildcards.
-    }
-    broadcastStatus(null, "RUNNING"); // Broadcast globally
-
+    // Initialize Client
+    const client = new NotebookLMClient();
     try {
-        const client = new NotebookLMClient();
         await client.init();
+    } catch (e) {
+        broadcastStatus(null, "FAILED", { error: e.message });
+        return { success: false, error: e.message };
+    }
 
-        console.log("Creating Notebook for Queue...");
-        const notebookId = await client.createNotebook("Infographic Queue Batch");
-        console.log("Notebook ID:", notebookId);
+    if (mode === 'merged') {
+        // --- MERGED MODE ---
+        try {
+            // Mark all items as RUNNING
+            for (const item of queue) {
+                broadcastStatus(null, "QUEUE_UPDATE", { videoId: item.videoId, status: 'RUNNING', message: 'Merging...' });
+                await updateState(item.videoId, { status: 'RUNNING', operation_id: Date.now(), title: item.title });
+            }
 
-        // 3. Add Sources Sequentially
-        let lastSourceId = null;
+            // 1. Create One Notebook
+            const notebookId = await client.createNotebook(`Infographic Queue Merged (${queue.length})`);
+            console.log("Merged Notebook ID:", notebookId);
+
+            // 2. Add All Sources
+            let allSourceIds = [];
+            for (let i = 0; i < queue.length; i++) {
+                const item = queue[i];
+                console.log(`Adding source ${i + 1}/${queue.length}: ${item.url}`);
+                broadcastStatus(null, "QUEUE_UPDATE", { videoId: item.videoId, status: 'RUNNING', message: 'Adding...' });
+
+                const sourceData = await client.addSource(notebookId, item.url);
+                if (sourceData && sourceData.source_id) {
+                    allSourceIds.push(sourceData.source_id);
+                }
+
+                // Pause to prevent rate limiting
+                await new Promise(r => setTimeout(r, 2000));
+            }
+
+            console.log(`Collected ${allSourceIds.length} sources for merged generation.`);
+
+            // Ingestion Wait
+            await new Promise(r => setTimeout(r, 6000));
+
+            // 3. Run Tool Once
+            console.log("Running Infographic Tool on Merged Batch...");
+            // Update status to show "Generating" for all
+            for (const item of queue) {
+                broadcastStatus(null, "QUEUE_UPDATE", { videoId: item.videoId, status: 'RUNNING', message: 'Generating...' });
+            }
+
+            const opId = await client.runInfographicTool(notebookId, allSourceIds);
+            if (!opId) throw new Error("Limit exceeded or tool failed");
+
+            // 4. Poll Result
+            const imageUrl = await client.waitForInfographic(notebookId, opId);
+
+            // 5. Complete All
+            for (const item of queue) {
+                await updateState(item.videoId, { status: 'COMPLETED', image_url: imageUrl, title: item.title });
+                broadcastStatus(null, "QUEUE_UPDATE", {
+                    videoId: item.videoId,
+                    status: 'COMPLETED',
+                    imageUrl: imageUrl
+                });
+            }
+
+        } catch (e) {
+            console.error("Merged Queue Failed:", e);
+            const userError = getUserFriendlyError(e.message || "");
+            const finalStatus = userError.type === 'LIMIT' ? 'LIMIT_EXCEEDED' : 'FAILED';
+
+            for (const item of queue) {
+                // If parsing failed, pass raw message
+                const errorMsg = userError.message || e.message;
+
+                await updateState(item.videoId, { status: finalStatus, error: errorMsg });
+                broadcastStatus(null, "QUEUE_UPDATE", {
+                    videoId: item.videoId,
+                    status: finalStatus,
+                    error: errorMsg
+                });
+            }
+
+            // If it's a critical limit error, strictly throw/broadcast it globally 
+            if (finalStatus === 'LIMIT_EXCEEDED') {
+                broadcastStatus(null, "LIMIT_EXCEEDED", { error: userError.message });
+            }
+
+            throw e;
+        }
+
+    } else {
+        // --- SEPARATE MODE (Existing Logic) ---
         for (let i = 0; i < queue.length; i++) {
             const item = queue[i];
-            console.log(`Adding source ${i + 1}/${queue.length}: ${item.url}`);
+            console.log(`Processing Queue Item ${i + 1}/${queue.length}: ${item.title}`);
 
-            // Broadcast progress?
-            // updateState(primaryVideoId, { status: 'RUNNING', message: `Adding source ${i+1}/${queue.length}` });
+            broadcastStatus(null, "QUEUE_UPDATE", {
+                videoId: item.videoId,
+                status: 'RUNNING',
+                message: 'Creating Notebook...'
+            });
+            await chrome.storage.local.set({ lastActiveVideoId: item.videoId });
+            await updateState(item.videoId, { status: 'RUNNING', operation_id: Date.now(), title: item.title });
 
-            const sourceData = await client.addSource(notebookId, item.url);
-            lastSourceId = sourceData.source_id;
+            try {
+                // 1. Create Notebook
+                const notebookId = await client.createNotebook(`Infographic: ${item.title.substring(0, 50)}`);
+                console.log("Notebook ID:", notebookId);
 
-            // Brief pause between adds to be safe
-            await new Promise(r => setTimeout(r, 2000));
+                // 2. Add Source
+                broadcastStatus(null, "QUEUE_UPDATE", { videoId: item.videoId, status: 'RUNNING', message: 'Adding Source...' });
+                const sourceData = await client.addSource(notebookId, item.url);
+                const sourceId = sourceData.source_id;
+
+                await new Promise(r => setTimeout(r, 5000));
+
+                // 3. Run Tool
+                broadcastStatus(null, "QUEUE_UPDATE", { videoId: item.videoId, status: 'RUNNING', message: 'Generating Infographic...' });
+                const opId = await client.runInfographicTool(notebookId, sourceId);
+
+                if (!opId) throw new Error("Limit exceeded or tool failed");
+
+                // 4. Poll Result
+                const imageUrl = await client.waitForInfographic(notebookId, opId);
+
+                // 5. Complete
+                await updateState(item.videoId, { status: 'COMPLETED', image_url: imageUrl, title: item.title });
+                broadcastStatus(null, "QUEUE_UPDATE", {
+                    videoId: item.videoId,
+                    status: 'COMPLETED',
+                    imageUrl: imageUrl
+                });
+
+            } catch (e) {
+                console.error(`Failed item ${item.title}:`, e);
+                const userError = getUserFriendlyError(e.message || "");
+                const finalStatus = userError.type === 'LIMIT' ? 'LIMIT_EXCEEDED' : 'FAILED';
+                const errorMsg = userError.message || e.message;
+
+                await updateState(item.videoId, { status: finalStatus, error: errorMsg });
+                broadcastStatus(null, "QUEUE_UPDATE", {
+                    videoId: item.videoId,
+                    status: finalStatus,
+                    error: errorMsg
+                });
+
+                if (finalStatus === 'LIMIT_EXCEEDED') {
+                    // If limit hit during sequential, break loop?
+                    // Yes, stop processing further items.
+                    broadcastStatus(null, "LIMIT_EXCEEDED", { error: errorMsg });
+                    break;
+                }
+            }
+
+            if (i < queue.length - 1) {
+                await new Promise(r => setTimeout(r, 2000));
+            }
         }
-
-        // Wait for ingestion
-        await new Promise(r => setTimeout(r, 5000));
-
-        // 4. Run Infographic Tool (Using the last source ID is usually fine, or maybe we don't strictly need it if context is whole notebook)
-        // NotebookLM tools usually work on "selected sources". Does API auto-select all? 
-        // Usually creating a new notebook enables all current sources.
-
-        console.log("Running Infographic Tool on Batch...");
-        const opId = await client.runInfographicTool(notebookId, lastSourceId);
-
-        if (!opId) {
-            throw new Error("Daily limit exceeded or tool failed");
-        }
-
-        console.log("Polling for result...");
-        const imageUrl = await client.waitForInfographic(notebookId, opId);
-        console.log("Success! Image:", imageUrl);
-
-        // Update ALL queued items to COMPLETED
-        for (const item of queue) {
-            await updateState(item.videoId, { status: 'COMPLETED', image_url: imageUrl, title: item.title });
-        }
-        broadcastStatus(null, "COMPLETED", { image_url: imageUrl });
-
-        // Also clear queue? Maybe content.js should handle that upon receiving COMPLETED?
-        // Let's leave it to user to clear or content script to auto-clear.
-
-        return { success: true, imageUrl: imageUrl };
-
-    } catch (e) {
-        console.error("Queue Generation Failed:", e);
-        const errMsg = e.message || "Unknown error";
-        for (const item of queue) {
-            await updateState(item.videoId, { status: 'FAILED', error: errMsg });
-        }
-        broadcastStatus(null, "FAILED", { error: errMsg });
-        throw e;
     }
+
+    return { success: true };
 }
 
 
@@ -358,6 +595,7 @@ class NotebookLMClient {
         }
 
         const text = await response.text();
+        console.log(`RPC ${rpcId} Raw Response (${text.length} chars):`, text.substring(0, 2000));
         const parsed = this.parseEnvelope(text, rpcId);
 
         // Debug Log only for addSource failure investigation
@@ -390,21 +628,163 @@ class NotebookLMClient {
         const validObjects = results.flat();
 
         for (const chunk of validObjects) {
-            if (Array.isArray(chunk) && chunk.length > 2 && chunk[1] === rpcId) {
-                const inner = chunk[2];
-                if (inner) {
+            // Case 1: Flat structure ["wrb.fr", "rpcId", "payload"]
+            // This is what we see in the user's logs
+            if (chunk[0] === 'wrb.fr' && chunk[1] === rpcId) {
+                const payload = chunk[2];
+                if (payload) {
                     try {
-                        return JSON.parse(inner);
+                        return JSON.parse(payload);
                     } catch (e) {
-                        return inner;
+                        return payload;
+                    }
+                }
+            }
+
+            // Case 2: Nested header structure (legacy or different RPC type)
+            // [["wrb.fr", "rpcId", ...], payload]
+            if (Array.isArray(chunk[0]) && chunk[0][0] === 'wrb.fr' && chunk[0][1] === rpcId) {
+                // Payload is usually at index 2, but sometimes 1 if structure is tight
+                const payload = chunk[2];
+                if (payload) {
+                    try {
+                        return JSON.parse(payload);
+                    } catch (e) {
+                        return payload;
                     }
                 }
             }
         }
-        return [];
     }
 
-    // ... existing findUuid ...
+    async listNotebooks() {
+        console.log("NotebookLMClient: Listing notebooks...");
+        const rpcId = "wXbhsf";
+        const payload = [null, 1, null, [2]];
+
+        let response;
+        try {
+            response = await this.executeRpc(rpcId, payload);
+            console.log("NotebookLMClient: List RPC executed. Response type:", typeof response);
+            if (response) {
+                console.log("NotebookLMClient: Response preview:", JSON.stringify(response).substring(0, 1000));
+            }
+        } catch (err) {
+            console.error("NotebookLMClient: List RPC failed:", err);
+            throw err;
+        }
+
+        // Response parsing logic for wXbhsf
+        // Based on HAR, the structure is deeply nested.
+        // We look for the main list array.
+        const notebooks = [];
+        try {
+            // Traverse response to find the list.
+            function findNotebooks(obj) {
+                if (!obj || typeof obj !== 'object') return;
+
+                if (Array.isArray(obj)) {
+                    // Log array length for debugging occasional nodes
+                    // if (obj.length > 2 && typeof obj[2] === 'string' && obj[2].length === 36) console.log("Checking potential match:", obj);
+
+                    // Corrected structure based on HAR analysis:
+                    // Index 0: Title (string)
+                    // Index 2: UUID (string, 36 chars)
+                    // Example: ["Title", [...], "uuid-...", ...]
+                    if (obj.length > 2 && typeof obj[0] === 'string' && typeof obj[2] === 'string' &&
+                        obj[2].length === 36 && obj[2].split('-').length === 5) {
+                        const id = obj[2];
+                        const title = obj[0] || "Untitled Notebook"; // Handle empty titles
+
+                        // UUID check
+                        if ((id.match(/-/g) || []).length === 4) {
+                            console.log("Found match:", title, id);
+                            notebooks.push({
+                                id: id,
+                                title: title
+                            });
+                        }
+                    }
+                    obj.forEach(findNotebooks);
+                } else {
+                    Object.values(obj).forEach(findNotebooks);
+                }
+            }
+            findNotebooks(response);
+            console.log(`NotebookLMClient: Found ${notebooks.length} notebooks`);
+        } catch (e) {
+            console.error("Error parsing listNotebooks response:", e);
+        }
+        return notebooks;
+    }
+
+    async getNotebookContent(notebookId) {
+        const rpcId = "gArtLc";
+        const innerPayload = [[2], notebookId, "NOT artifact.status = \"ARTIFACT_STATUS_SUGGESTED\""];
+        const response = await this.executeRpc(rpcId, innerPayload);
+
+        const content = {
+            notebookId: notebookId,
+            sources: [],
+            text_blocks: []
+        };
+
+        try {
+            function processNode(obj) {
+                if (!obj || typeof obj !== 'object') return;
+
+                if (Array.isArray(obj)) {
+                    // Check for Sources: [uuid, title, ...]
+                    if (obj.length > 2 && typeof obj[0] === 'string' && typeof obj[1] === 'string' && obj[0].length === 36) {
+                        // Simple check if it looks like a Source ID
+                        if ((obj[0].match(/-/g) || []).length === 4) {
+                            content.sources.push({
+                                id: obj[0],
+                                title: obj[1]
+                            });
+                        }
+                    }
+
+                    // Check for Text Content
+                    if (obj.length > 0) {
+                        obj.forEach(item => {
+                            if (typeof item === 'string') {
+                                // Heuristic: Capture reasonable length strings 
+                                if (item.length > 10 && !item.match(/^[a-f0-9-]{36}$/) && !item.startsWith("http")) {
+                                    // Avoid duplicates
+                                    if (!content.text_blocks.includes(item)) {
+                                        content.text_blocks.push(item);
+                                    }
+                                }
+                            } else if (Array.isArray(item)) {
+                                // Specific text segment structure: [["Text"]] is common in some encodings
+                                if (item.length === 1 && typeof item[0] === 'string' && item[0].length > 1) {
+                                    if (!content.text_blocks.includes(item[0])) {
+                                        content.text_blocks.push(item[0]);
+                                    }
+                                } else {
+                                    processNode(item);
+                                }
+                            } else {
+                                processNode(item);
+                            }
+                        });
+                    }
+                } else {
+                    Object.values(obj).forEach(processNode);
+                }
+            }
+            processNode(response);
+        } catch (e) {
+            console.error("Error parsing getNotebookContent response:", e);
+        }
+
+        // Clean up text blocks to form a coherent summary
+        return {
+            ...content,
+            full_text: content.text_blocks.join("\n\n")
+        };
+    }
     findUuid(obj) {
         // ... existing findUuid ...
         if (typeof obj === 'string') {
@@ -479,14 +859,25 @@ class NotebookLMClient {
         return ids;
     }
 
-    async runInfographicTool(notebookId, sourceId) {
+    async runInfographicTool(notebookId, sourceIds) {
         // RPC: R7cb6c
         // 7 = Infographic
         // Payload struct: [2], nbId, [ ... ]
-        // Using simplified sturdy payload from python client
-        const sourceParam = [[[sourceId]]];
+
+        let sourceParam;
+        if (Array.isArray(sourceIds)) {
+            // Structure for multiple sources: List of [sourceId] lists
+            // e.g. [ [ [id1], [id2] ] ]
+            sourceParam = [sourceIds.map(id => [id])];
+        } else {
+            // Single source
+            sourceParam = [[[sourceIds]]];
+        }
+
         const toolPayload = [null, null, 7, sourceParam, null, null, null, null, null, null, null, null, null, null, [[null, null, null, 1, 2]]];
         const payload = [[2], notebookId, toolPayload];
+
+        console.log("Running Tool with Payload structure for sources:", JSON.stringify(sourceParam));
 
         const resp = await this.executeRpc("R7cb6c", payload);
 
@@ -553,7 +944,7 @@ async function broadcastStatus(url, status, payload = {}) {
         const allTabs = await chrome.tabs.query({ url: "*://*.youtube.com/*" });
         for (const tab of allTabs) {
             chrome.tabs.sendMessage(tab.id, {
-                type: status === "AUTH_EXPIRED" ? "AUTH_EXPIRED" : "INFOGRAPHIC_UPDATE",
+                type: (status === "AUTH_EXPIRED" || status === "QUEUE_UPDATE") ? status : "INFOGRAPHIC_UPDATE",
                 videoId: videoId,
                 status: status,
                 ...payload
@@ -570,5 +961,3 @@ async function updateState(videoId, newState) {
     states[videoId] = { ...(states[videoId] || {}), ...newState };
     await chrome.storage.local.set({ infographicStates: states });
 }
-
-

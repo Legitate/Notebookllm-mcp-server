@@ -1,0 +1,11 @@
+{
+    "mcpServers": {
+        "infographic-gen": {
+            "command": "python3",
+            "args": [
+                "/ABSOLUTE/PATH/TO/google-extension-main/serverless_extension/mcp_server/server.py",
+                "--visible"
+            ]
+        }
+    }
+}

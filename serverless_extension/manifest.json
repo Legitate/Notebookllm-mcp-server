@@ -1,5 +1,8 @@
 {
     "manifest_version": 3,
+    "content_security_policy": {
+        "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' ws://localhost:18000 ws://127.0.0.1:18000 https://notebooklm.google.com https://accounts.google.com;"
+    },
     "name": "Infographic Generator for YouTube",
     "version": "1.0",
     "description": "Generate infographics from YouTube videos using NotebookLM.",
@@ -10,7 +13,8 @@
         "storage",
         "cookies",
         "declarativeNetRequest",
-        "downloads"
+        "downloads",
+        "offscreen"
     ],
     "host_permissions": [
         "*://*.youtube.com/*",

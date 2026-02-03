@@ -15,6 +15,25 @@ function extractVideoId(url) {
     return null;
 }
 
+// --- KEEP ALIVE ---
+let keepAlivePort;
+function connectKeepAlive() {
+    keepAlivePort = chrome.runtime.connect({ name: 'keepAlive' });
+    keepAlivePort.onDisconnect.addListener(connectKeepAlive);
+
+    // Heartbeat to keep service worker active
+    setInterval(() => {
+        if (keepAlivePort) {
+            try {
+                keepAlivePort.postMessage({ type: 'ping' });
+            } catch (e) {
+                // If port is detached, we'll reconnect via onDisconnect
+            }
+        }
+    }, 5000); // 5 seconds (Aggressive Keep-Alive)
+}
+connectKeepAlive();
+
 // run immediately
 detectAndSendUrl();
 
@@ -63,14 +82,34 @@ function injectStyles() {
     style.id = 'altrosyn-styles';
     style.textContent = `
         #${UI_CONTAINER_ID} {
+            /* Theme Variables - Default Light */
+            --bg-panel: rgba(255, 255, 255, 0.85);
+            --text-main: #1f2937;
+            --text-header: #111827;
+            --text-secondary: #6b7280;
+            --border-panel: rgba(255, 255, 255, 0.8);
+            --shadow-panel: rgba(0, 0, 0, 0.12);
+            --icon-main: #2563eb;
+            --btn-hover: rgba(0,0,0,0.04);
+            --minimized-bg: rgba(255, 255, 255, 0.9);
+            --minimized-shadow: rgba(0,0,0,0.15);
+            --tooltip-bg: #333;
+            --tooltip-text: #fff;
+            --queue-item-bg: rgba(255, 255, 255, 0.6);
+            --queue-item-text: #4b5563;
+            --queue-remove: #ef4444;
+            --btn-sec-bg: rgba(255, 255, 255, 0.6);
+            --btn-sec-text: #2563eb;
+            --btn-sec-border: rgba(37, 99, 235, 0.2);
+
             position: fixed;
             bottom: 24px;
             right: 24px;
             width: 340px;
-            background: rgba(255, 255, 255, 0.85);
+            background: var(--bg-panel);
             backdrop-filter: blur(20px) saturate(180%);
             -webkit-backdrop-filter: blur(20px) saturate(180%);
-            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12), 0 1px 1px rgba(0,0,0,0.05);
+            box-shadow: 0 12px 40px var(--shadow-panel), 0 1px 1px rgba(0,0,0,0.05);
             border-radius: 24px;
             padding: 24px;
             z-index: 2147483647;
@@ -78,10 +117,32 @@ function injectStyles() {
             display: none;
             flex-direction: column;
             gap: 18px;
-            border: 1px solid rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--border-panel);
             transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-            color: #1f2937;
+            color: var(--text-main);
         }
+        
+        #${UI_CONTAINER_ID}.dark-mode {
+            --bg-panel: rgba(17, 24, 39, 0.95);
+            --text-main: #f3f4f6;
+            --text-header: #f9fafb;
+            --text-secondary: #9ca3af;
+            --border-panel: rgba(255, 255, 255, 0.1);
+            --shadow-panel: rgba(0, 0, 0, 0.5);
+            --icon-main: #60a5fa;
+            --btn-hover: rgba(255,255,255,0.1);
+            --minimized-bg: rgba(30, 41, 59, 0.95);
+            --minimized-shadow: rgba(0,0,0,0.5);
+            --tooltip-bg: #1e293b;
+            --tooltip-text: #f8fafc;
+            --queue-item-bg: rgba(31, 41, 55, 0.8);
+            --queue-item-text: #d1d5db;
+            --queue-remove: #f87171;
+            --btn-sec-bg: rgba(255, 255, 255, 0.05);
+            --btn-sec-text: #93c5fd;
+            --btn-sec-border: rgba(255, 255, 255, 0.15);
+        }
+
         #${UI_CONTAINER_ID}.minimized {
             width: 56px;
             height: 56px;
@@ -89,11 +150,11 @@ function injectStyles() {
             border-radius: 28px;
             cursor: pointer;
             overflow: hidden;
-            background: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+            background: var(--minimized-bg);
+            box-shadow: 0 8px 24px var(--minimized-shadow);
             justify-content: center;
             align-items: center;
-            border: 1px solid rgba(255,255,255,0.8);
+            border: 1px solid var(--border-panel);
         }
         #${UI_CONTAINER_ID}.minimized:hover {
             transform: scale(1.08);
@@ -112,7 +173,7 @@ function injectStyles() {
         .altrosyn-title {
             font-size: 17px;
             font-weight: 700;
-            color: #111827;
+            color: var(--text-header);
             display: flex;
             align-items: center;
             gap: 10px;
@@ -121,7 +182,7 @@ function injectStyles() {
         .altrosyn-title svg {
             width: 22px;
             height: 22px;
-            color: #2563eb;
+            color: var(--icon-main);
             filter: drop-shadow(0 2px 4px rgba(37,99,235,0.2));
         }
         .altrosyn-min-btn {
@@ -129,17 +190,17 @@ function injectStyles() {
             border: none;
             cursor: pointer;
             padding: 6px;
-            color: #9ca3af;
+            color: var(--text-secondary);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
         }
-        }
+        /* Removed extra brace here */
         .altrosyn-min-btn:hover {
-            background: rgba(0,0,0,0.04);
-            color: #4b5563;
+            background: var(--btn-hover);
+            color: var(--text-main);
         }
 
         /* Help Tooltip */
@@ -149,19 +210,19 @@ function injectStyles() {
         }
         .altrosyn-help-icon {
             cursor: pointer;
-            color: #9ca3af;
+            color: var(--text-secondary);
             width: 18px;
             height: 18px;
             transition: color 0.2s;
         }
         .altrosyn-help-icon:hover {
-            color: #2563eb;
+            color: var(--icon-main);
         }
         .altrosyn-tooltip {
             visibility: hidden;
             width: 220px;
-            background-color: #333;
-            color: #fff;
+            background-color: var(--tooltip-bg);
+            color: var(--tooltip-text);
             text-align: left;
             border-radius: 6px;
             padding: 10px;
@@ -176,6 +237,7 @@ function injectStyles() {
             font-weight: 400;
             line-height: 1.4;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-panel);
         }
         .altrosyn-tooltip::after {
             content: "";
@@ -185,7 +247,7 @@ function injectStyles() {
             margin-left: -5px;
             border-width: 5px;
             border-style: solid;
-            border-color: #333 transparent transparent transparent;
+            border-color: var(--tooltip-bg) transparent transparent transparent;
         }
         .altrosyn-help-container:hover .altrosyn-tooltip {
             visibility: visible;
@@ -230,15 +292,20 @@ function injectStyles() {
             transform: none;
             box-shadow: none;
         }
+        .dark-mode .altrosyn-btn:disabled {
+            background: #374151;
+            color: #6b7280;
+        }
+
         .altrosyn-btn-secondary {
-            background: rgba(255, 255, 255, 0.6);
-            color: #2563eb;
-            border: 1px solid rgba(37, 99, 235, 0.2);
+            background: var(--btn-sec-bg);
+            color: var(--btn-sec-text);
+            border: 1px solid var(--btn-sec-border);
             box-shadow: 0 2px 8px rgba(0,0,0,0.03);
         }
         .altrosyn-btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.9);
-            border-color: rgba(37, 99, 235, 0.4);
+            background: var(--bg-panel); /* slightly opaque */
+            border-color: var(--icon-main);
             box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
         }
 
@@ -246,7 +313,7 @@ function injectStyles() {
         .altrosyn-status {
             font-size: 14px;
             text-align: center;
-            color: #6b7280;
+            color: var(--text-secondary);
             margin: 2px 0;
             font-weight: 500;
         }
@@ -267,7 +334,7 @@ function injectStyles() {
         .altrosyn-link {
             display: block;
             text-align: center;
-            color: #2563eb;
+            color: var(--icon-main);
             text-decoration: none;
             padding: 10px;
             font-size: 13px;
@@ -276,12 +343,12 @@ function injectStyles() {
             transition: background 0.2s;
         }
         .altrosyn-link:hover {
-            background: rgba(37, 99, 235, 0.08);
+            background: var(--btn-hover);
         }
 
         /* Queue UI */
         .altrosyn-queue-container {
-            border-top: 1px solid rgba(0,0,0,0.06);
+            border-top: 1px solid var(--border-panel);
             padding-top: 16px;
             margin-top: 8px;
             display: flex;
@@ -294,12 +361,12 @@ function injectStyles() {
             align-items: center;
             font-size: 13px;
             font-weight: 600;
-            color: #374151;
+            color: var(--text-main);
             cursor: pointer;
             user-select: none;
         }
         .altrosyn-queue-header:hover {
-            color: #111827;
+            color: var(--text-header);
         }
         .altrosyn-queue-count {
             background: #eff6ff;
@@ -309,6 +376,11 @@ function injectStyles() {
             font-size: 11px;
             font-weight: 700;
         }
+        .dark-mode .altrosyn-queue-count {
+            background: #1e3a8a;
+            color: #bfdbfe;
+        }
+
         .altrosyn-queue-list {
             display: none; /* Toggled */
             flex-direction: column;
@@ -329,6 +401,9 @@ function injectStyles() {
             background: #d1d5db;
             border-radius: 4px;
         }
+        .dark-mode .altrosyn-queue-list::-webkit-scrollbar-thumb {
+            background: #4b5563;
+        }
         
         .altrosyn-queue-list.expanded {
             display: flex;
@@ -339,10 +414,10 @@ function injectStyles() {
             align-items: center;
             font-size: 12px;
             padding: 8px 10px;
-            background: rgba(255, 255, 255, 0.6);
-            border: 1px solid rgba(0,0,0,0.04);
+            background: var(--queue-item-bg);
+            border: 1px solid var(--border-panel);
             border-radius: 8px;
-            color: #4b5563;
+            color: var(--queue-item-text);
         }
         .altrosyn-queue-item span {
             overflow: hidden;
@@ -351,7 +426,7 @@ function injectStyles() {
             flex: 1;
         }
         .altrosyn-queue-remove {
-            color: #ef4444;
+            color: var(--queue-remove);
             cursor: pointer;
             font-weight: bold;
             padding: 2px 6px;
@@ -369,7 +444,7 @@ function injectStyles() {
             display: none;
             width: 28px;
             height: 28px;
-            color: #2563eb;
+            color: var(--icon-main);
             filter: drop-shadow(0 2px 4px rgba(37,99,235,0.25));
         }
         #${UI_CONTAINER_ID}.minimized .minimized-icon {
@@ -432,15 +507,49 @@ function getOrCreateUI() {
                         <span style="opacity:0.8; font-size:11px;">Requires NotebookLM account.</span>
                     </div>
                 </div>
-                <button class="altrosyn-min-btn" title="Minimize">
+                <button class="altrosyn-min-btn" id="${UI_CONTAINER_ID}-theme-toggle" title="Toggle Theme">
+                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="sun-icon"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="moon-icon" style="display:none;"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                </button>
+                <button class="altrosyn-min-btn" id="${UI_CONTAINER_ID}-minimize-btn" title="Minimize">
                     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                 </button>
             </div>
         `;
         container.appendChild(header);
 
+        // Theme Handler
+        const themeBtn = header.querySelector(`#${UI_CONTAINER_ID}-theme-toggle`);
+        const sunIcon = themeBtn.querySelector('.sun-icon');
+        const moonIcon = themeBtn.querySelector('.moon-icon');
+
+        function applyTheme(isDark) {
+            if (isDark) {
+                container.classList.add('dark-mode');
+                sunIcon.style.display = 'none';
+                moonIcon.style.display = 'block';
+            } else {
+                container.classList.remove('dark-mode');
+                sunIcon.style.display = 'block';
+                moonIcon.style.display = 'none';
+            }
+        }
+
+        // Load saved theme
+        chrome.storage.local.get(['theme'], (result) => {
+            applyTheme(result.theme === 'dark');
+        });
+
+        themeBtn.onclick = (e) => {
+            e.stopPropagation();
+            const isDark = !container.classList.contains('dark-mode');
+            applyTheme(isDark);
+            chrome.storage.local.set({ theme: isDark ? 'dark' : 'light' });
+        };
+
         // Minimize Handler
-        header.querySelector('.altrosyn-min-btn').onclick = (e) => {
+        const minimizeBtn = header.querySelector(`#${UI_CONTAINER_ID}-minimize-btn`);
+        minimizeBtn.onclick = (e) => {
             e.stopPropagation();
             container.classList.add('minimized');
             chrome.storage.local.set({ minimized: true });
@@ -520,6 +629,34 @@ function getOrCreateUI() {
         // Queue Controls (Generate All, Clear)
         const queueControls = document.createElement('div');
         queueControls.className = 'altrosyn-queue-controls';
+        queueControls.style.flexDirection = 'column'; // Vertical layout for options
+        queueControls.style.gap = '8px';
+
+        // Options Container
+        const optionsDiv = document.createElement('div');
+        optionsDiv.style.display = 'flex';
+        optionsDiv.style.alignItems = 'center';
+        optionsDiv.style.gap = '8px';
+        optionsDiv.style.fontSize = '12px';
+        optionsDiv.style.color = 'var(--text-secondary)';
+
+        const mergeCheck = document.createElement('input');
+        mergeCheck.type = 'checkbox';
+        mergeCheck.id = UI_CONTAINER_ID + '-queue-merge-check';
+        // mergeCheck.checked = false; // Default to separate
+
+        const mergeLabel = document.createElement('label');
+        mergeLabel.htmlFor = mergeCheck.id;
+        mergeLabel.textContent = 'Generate in single notebook';
+        mergeLabel.style.cursor = 'pointer';
+
+        optionsDiv.appendChild(mergeCheck);
+        optionsDiv.appendChild(mergeLabel);
+        queueControls.appendChild(optionsDiv);
+
+        const buttonsDiv = document.createElement('div');
+        buttonsDiv.style.display = 'flex';
+        buttonsDiv.style.gap = '10px';
 
         const genQueueBtn = document.createElement('button');
         genQueueBtn.id = UI_CONTAINER_ID + '-queue-gen-btn';
@@ -529,14 +666,17 @@ function getOrCreateUI() {
         genQueueBtn.onclick = startQueueGeneration;
 
         const clearQueueBtn = document.createElement('button');
+        clearQueueBtn.id = UI_CONTAINER_ID + '-queue-clear-btn'; // Added ID
         clearQueueBtn.className = 'altrosyn-btn altrosyn-btn-secondary';
         clearQueueBtn.textContent = 'Clear';
         clearQueueBtn.style.fontSize = '12px';
         clearQueueBtn.style.width = 'auto';
         clearQueueBtn.onclick = clearQueue;
 
-        queueControls.appendChild(genQueueBtn);
-        queueControls.appendChild(clearQueueBtn);
+        buttonsDiv.appendChild(genQueueBtn);
+        buttonsDiv.appendChild(clearQueueBtn);
+        queueControls.appendChild(buttonsDiv);
+
         queueContainer.appendChild(queueControls);
 
         interactionContainer.appendChild(queueContainer);
@@ -654,12 +794,16 @@ function updateUI(status, imageUrl = null, errorMessage = null, title = null) {
         generateBtn.disabled = false;
         generateBtn.onclick = startGeneration;
     } else {
-        generateBtn.textContent = 'Generate Infographic';
-        generateBtn.className = 'altrosyn-btn';
-        generateBtn.disabled = false;
-        generateBtn.className = 'altrosyn-btn';
-        generateBtn.disabled = false;
-        generateBtn.onclick = startGeneration;
+        if (!currentVideoId) {
+            generateBtn.textContent = 'Open a Video First';
+            generateBtn.className = 'altrosyn-btn';
+            generateBtn.disabled = true;
+        } else {
+            generateBtn.textContent = 'Generate Infographic';
+            generateBtn.className = 'altrosyn-btn';
+            generateBtn.disabled = false;
+            generateBtn.onclick = startGeneration;
+        }
     }
 
     // Update Queue UI
@@ -669,14 +813,22 @@ function updateUI(status, imageUrl = null, errorMessage = null, title = null) {
     // Shared Download Logic
     const triggerDownload = (e) => {
         e.preventDefault();
+
+        // Robust Title Logic
+        let videoTitle = title;
+        if (!videoTitle) {
+            // Fallback 1: YouTube H1
+            const h1 = document.querySelector('h1.ytd-video-primary-info-renderer');
+            if (h1) videoTitle = h1.textContent.trim();
+        }
+        if (!videoTitle) {
+            // Fallback 2: Document Title
+            videoTitle = document.title.replace(' - YouTube', '');
+        }
+
         let filename = "infographic.png";
-        if (title) {
-            const safeTitle = title.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-            filename = `${safeTitle}.png`;
-        } else {
-            // Try fallback to page title if not in state
-            const pageTitle = document.title.replace(' - YouTube', '');
-            const safeTitle = pageTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        if (videoTitle) {
+            const safeTitle = videoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
             filename = `${safeTitle}.png`;
         }
 
@@ -784,6 +936,12 @@ chrome.runtime.onMessage.addListener((message) => {
         updateUI('AUTH_REQUIRED');
     } else if (message.type === 'LIMIT_EXCEEDED') {
         updateUI('LIMIT_EXCEEDED');
+    } else if (message.type === 'QUEUE_UPDATE') {
+        // message contains { videoId, status, message, imageUrl, error }
+        // We can optionally pass this data to updateQueueUI to avoid a full fetch, 
+        // but fetching states is safer to ensure consistency.
+        updateQueueUI('QUEUE_PROCESSING');
+        restoreStateForCurrentVideo();
     }
 });
 
@@ -797,31 +955,33 @@ function startGeneration() {
 // --- QUEUE LOGIC ---
 
 function updateQueueUI(currentStatus = 'IDLE') {
-    chrome.storage.local.get(['infographicQueue'], (result) => {
+    chrome.storage.local.get(['infographicQueue', 'infographicStates'], (result) => {
         const queue = result.infographicQueue || [];
+        const states = result.infographicStates || {};
+
         const countEl = document.getElementById(UI_CONTAINER_ID + '-queue-count');
         const listEl = document.getElementById(UI_CONTAINER_ID + '-queue-list');
         const sectionEl = document.getElementById(UI_CONTAINER_ID + '-queue-section');
         const addBtn = document.getElementById(UI_CONTAINER_ID + '-queue-add-btn');
         const genBtn = document.getElementById(UI_CONTAINER_ID + '-queue-gen-btn');
+        const clearBtn = document.getElementById(UI_CONTAINER_ID + '-queue-clear-btn');
+        const mergeCheck = document.getElementById(UI_CONTAINER_ID + '-queue-merge-check');
+        const statusEl = document.getElementById(UI_CONTAINER_ID + '-status');
 
         if (countEl) countEl.textContent = queue.length;
-
-        // Show/Hide Queue Section based on content? 
-        // Let's always show it if there's something, or maybe always show it to discover feature?
-        // Decided: always show it to let user know it exists.
         if (sectionEl) sectionEl.style.display = 'flex';
 
-        // Check if current video is in queue
         const currentId = extractVideoId(window.location.href);
 
-        // Helper to disable buttons
-        const isRunning = (currentStatus === 'RUNNING');
+        // Determine if ANY queue processing is active based on states or passed status
+        // A simple heuristic: if any queued item is RUNNING, we are in Queue Mode
+        const isQueueRunning = queue.some(item => states[item.videoId]?.status === 'RUNNING') || currentStatus === 'QUEUE_PROCESSING';
 
+        // Add Button Logic
         if (addBtn) {
-            if (isRunning) {
+            if (isQueueRunning) {
                 addBtn.disabled = true;
-                addBtn.textContent = 'Queue Locked';
+                addBtn.textContent = 'Queue Processing...';
             } else if (!currentId) {
                 addBtn.disabled = true;
                 addBtn.textContent = 'Open Video to Add';
@@ -834,6 +994,10 @@ function updateQueueUI(currentStatus = 'IDLE') {
             }
         }
 
+        // Lock Clear Button and Checkbox
+        if (clearBtn) clearBtn.disabled = isQueueRunning;
+        if (mergeCheck) mergeCheck.disabled = isQueueRunning;
+
         // Render List
         if (listEl) {
             listEl.innerHTML = '';
@@ -841,7 +1005,7 @@ function updateQueueUI(currentStatus = 'IDLE') {
                 const emptyMsg = document.createElement('div');
                 emptyMsg.textContent = 'Queue is empty';
                 emptyMsg.style.fontSize = '12px';
-                emptyMsg.style.color = '#9aa0a6';
+                emptyMsg.style.color = 'var(--text-secondary)';
                 emptyMsg.style.textAlign = 'center';
                 emptyMsg.style.padding = '8px';
                 listEl.appendChild(emptyMsg);
@@ -849,9 +1013,22 @@ function updateQueueUI(currentStatus = 'IDLE') {
             } else {
                 // Generate Button Logic
                 if (genBtn) {
-                    if (isRunning) {
+                    if (isQueueRunning) {
                         genBtn.disabled = true;
-                        genBtn.textContent = 'Processing...';
+
+                        // Find which one is running (or if Merged mode, maybe all are running?)
+                        const runningIndex = queue.findIndex(item => states[item.videoId]?.status === 'RUNNING');
+
+                        if (runningIndex !== -1) {
+                            const currentTitle = queue[runningIndex].title;
+                            const shortTitle = currentTitle.length > 15 ? currentTitle.substring(0, 15) + '...' : currentTitle;
+                            genBtn.textContent = `Processing ${runningIndex + 1}/${queue.length}: ${shortTitle}`;
+                            if (statusEl) statusEl.textContent = `Processing video ${runningIndex + 1} of ${queue.length}...`;
+                        } else {
+                            // Maybe waiting between items or just starting
+                            genBtn.textContent = 'Processing Queue...';
+                        }
+
                     } else {
                         genBtn.disabled = false;
                         genBtn.textContent = 'Generate All';
@@ -859,24 +1036,58 @@ function updateQueueUI(currentStatus = 'IDLE') {
                 }
 
                 queue.forEach((item, index) => {
+                    const itemState = states[item.videoId] || {};
+                    const isItemRunning = itemState.status === 'RUNNING';
+                    const isItemCompleted = itemState.status === 'COMPLETED';
+                    const isItemFailed = itemState.status === 'FAILED';
+
                     const row = document.createElement('div');
                     row.className = 'altrosyn-queue-item';
-                    row.innerHTML = `<span>${item.title}</span>`;
 
-                    const removeBtn = document.createElement('div');
-                    removeBtn.className = 'altrosyn-queue-remove';
-                    removeBtn.textContent = '×';
-                    // Disable remove if running? Maybe safer.
-                    if (isRunning) {
-                        removeBtn.style.pointerEvents = 'none';
-                        removeBtn.style.opacity = '0.5';
-                    } else {
+                    // Status Icon/Indicator
+                    let statusIcon = '';
+                    if (isItemRunning) statusIcon = '<span style="color:#2563eb; margin-right:6px;">↻</span>';
+                    else if (isItemCompleted) statusIcon = '<span style="color:#137333; margin-right:6px;">✓</span>';
+                    else if (isItemFailed) statusIcon = '<span style="color:#d93025; margin-right:6px;">⚠</span>';
+                    else statusIcon = '<span style="color:#9aa0a6; margin-right:6px;">•</span>';
+
+                    let actionBtn = '';
+                    if (isItemCompleted && itemState.image_url) {
+                        // View Button
+                        actionBtn = `<button class="view-btn" style="border:none; background:none; color:#2563eb; font-weight:bold; cursor:pointer; font-size:11px; margin-left:6px;">View</button>`;
+                    } else if (!isQueueRunning) {
+                        // Remove Button (only if not running)
+                        actionBtn = `<div class="altrosyn-queue-remove">×</div>`;
+                    }
+
+                    row.innerHTML = `
+                        <div style="display:flex; align-items:center; overflow:hidden; flex:1;">
+                            ${statusIcon}
+                            <span title="${item.title}">${item.title}</span>
+                        </div>
+                        ${actionBtn}
+                    `;
+
+                    // Handlers
+                    const viewBtn = row.querySelector('.view-btn');
+                    if (viewBtn) {
+                        viewBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            // Trigger Download/View from background or just open URL
+                            // Let's reuse the updateUI to show it in the main preview area!
+                            updateUI('COMPLETED', itemState.image_url, null, item.title);
+                            // Also scroll to top or something?
+                        };
+                    }
+
+                    const removeBtn = row.querySelector('.altrosyn-queue-remove');
+                    if (removeBtn) {
                         removeBtn.onclick = (e) => {
                             e.stopPropagation();
                             removeFromQueue(index);
                         };
                     }
-                    row.appendChild(removeBtn);
+
                     listEl.appendChild(row);
                 });
             }
@@ -896,9 +1107,6 @@ function handleAddToQueue() {
         if (!queue.some(item => item.videoId === videoId)) {
             queue.push({ videoId, url, title });
             chrome.storage.local.set({ infographicQueue: queue }, () => {
-                // If we are adding, we must be in a state where we CAN add, so likely IDLE or at least not RUNNING queue
-                // But let's check current UI state/storage if we wanted to be 100% pure, but IDLE is safe default for "enable buttons"
-                // Actually, best to just call it without args to default to IDLE which is "Interactive"
                 updateQueueUI('IDLE');
             });
         }
@@ -927,22 +1135,43 @@ function toggleQueueList() {
 }
 
 function startQueueGeneration() {
-    chrome.storage.local.get(['infographicQueue'], (result) => {
-        const queue = result.infographicQueue || [];
-        if (queue.length === 0) return;
+    try {
+        chrome.storage.local.get(['infographicQueue'], (result) => {
+            const queue = result.infographicQueue || [];
+            if (queue.length === 0) return;
 
-        updateUI('RUNNING'); // Triggers updateQueueUI('RUNNING') disabling buttons
-        const statusEl = document.getElementById(UI_CONTAINER_ID + '-status');
-        if (statusEl) statusEl.textContent = `Processing ${queue.length} videos...`;
+            const mergeCheck = document.getElementById(UI_CONTAINER_ID + '-queue-merge-check');
+            const mode = mergeCheck && mergeCheck.checked ? 'merged' : 'separate';
 
-        chrome.runtime.sendMessage({ type: 'GENERATE_QUEUE_INFOGRAPHIC', queue: queue });
-    });
+            updateQueueUI('QUEUE_PROCESSING');
+            const statusEl = document.getElementById(UI_CONTAINER_ID + '-status');
+            if (statusEl) statusEl.textContent = mode === 'merged' ? 'Merging videos...' : `Processing ${queue.length} videos...`;
+
+            chrome.runtime.sendMessage({ type: 'GENERATE_QUEUE_INFOGRAPHIC', queue: queue, mode: mode });
+        });
+    } catch (e) {
+        if (e.message.includes('invalidated')) {
+            alert("Extension updated. Please refresh the page to continue.");
+        } else {
+            console.error(e);
+        }
+    }
 }
 
 
 function resetToInitialState() {
     const currentVideoId = extractVideoId(window.location.href);
-    if (!currentVideoId) return;
+
+    // If on Home Page (no video ID), we just want to clear the global sticky state.
+    if (!currentVideoId) {
+        chrome.storage.local.get(['infographicStates'], (result) => {
+            // Just plain clear the lastActiveVideoId so nothing sticks.
+            chrome.storage.local.set({ lastActiveVideoId: null }, () => {
+                restoreStateForCurrentVideo();
+            });
+        });
+        return;
+    }
 
     // Clear state for this video AND claim focus to break any sticky state from other videos
     chrome.storage.local.get(['infographicStates'], (result) => {
